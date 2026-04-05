@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radio</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100vw; height:100vh; background:#000; overflow:hidden; }
+    #wrap { position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    video { width:100%; height:100%; object-fit:contain; }
+    #overlay {
+      position:absolute; bottom:0; left:0; right:0;
+      background:linear-gradient(transparent, rgba(0,0,0,0.75));
+      color:#fff; padding:14px 24px;
+      font-family:sans-serif; display:flex; align-items:center; gap:14px;
+      opacity:0; transition:opacity 0.4s;
+    }
+    #overlay.visible { opacity:1; }
+    #dot { width:10px; height:10px; border-radius:50%; background:#e31e24; animation:blink 1.2s infinite; flex-shrink:0; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+    #status { font-size:15px; color:#ddd; }
+    #errmsg {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:rgba(0,0,0,0.85); color:#fff; padding:20px 36px;
+      border-radius:8px; font-family:sans-serif; font-size:18px;
+      text-align:center; display:none;
+    }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <video id="video" autoplay playsinline></video>
+  <div id="overlay">
+    <div id="dot"></div>
+    <span id="status">Connessione in corso…</span>
+  </div>
+  <div id="errmsg"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+<script>
+const STREAM  = 'https://57068da1deb21.streamlock.net/radiorbs/radiorbs/playlist.m3u8';
+const video   = document.getElementById('video');
+const statusEl= document.getElementById('status');
+const overlay = document.getElementById('overlay');
+const errmsg  = document.getElementById('errmsg');
+let retryTimer = null;
+let retries = 0;
+
+function showOverlay(auto) {
+  overlay.classList.add('visible');
+  clearTimeout(window._hide);
+  if (auto) window._hide = setTimeout(() => overlay.classList.remove('visible'), 4000);
+}
+
+function loadStream() {
+  clearTimeout(retryTimer);
+  if (Hls.isSupported()) {
+    const hls = new Hls({ enableWorker: false });
+    hls.loadSource(STREAM);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      retries = 0;
+      video.play().catch(() => {});
+      statusEl.textContent = '● LIVE';
+      showOverlay(true);
+    });
+    hls.on(Hls.Events.ERROR, (e, data) => {
+      if (data.fatal) {
+        hls.destroy();
+        retries++;
+        const wait = Math.min(5000 * retries, 30000);
+        statusEl.textContent = 'Riconnessione (' + retries + ')…';
+        showOverlay(false);
+        retryTimer = setTimeout(loadStream, wait);
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = STREAM;
+    video.addEventListener('loadedmetadata', () => { video.play(); statusEl.textContent = '● LIVE'; showOverlay(true); });
+  } else {
+    errmsg.textContent = 'Formato non supportato.';
+    errmsg.style.display = 'block';
+  }
+}
+
+// D-pad centro = mostra overlay
+document.addEventListener('keydown', e => {
+  if ([13, 85, 179].includes(e.keyCode)) showOverlay(true);
+});
+
+loadStream();
+</script>
+</body>
+</html>
