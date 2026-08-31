@@ -31,3 +31,4 @@ adb install app-debug.apk
 - **Nome app:** `app/src/main/res/values/strings.xml`
 - **Stream URL:** `app/src/main/assets/player.html` → variabile `STREAM`
 - **Package ID:** `app/build.gradle` → `applicationId`
+Build APK aggiornato
