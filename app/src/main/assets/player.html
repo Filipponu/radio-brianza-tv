@@ -3,12 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radio</title>
+  <title>Radio Brianza TV</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:100vw; height:100vh; background:#000; overflow:hidden; }
     #wrap { position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     video { width:100%; height:100%; object-fit:contain; }
+    #splash { position:absolute; inset:0; top:0; right:0; bottom:0; left:0; background:#000; display:flex; align-items:center; justify-content:center; }
+    #splash img { width:60%; max-width:900px; height:auto; }
+    #splash.hidden { display:none; }
     #overlay {
       position:absolute; bottom:0; left:0; right:0;
       background:linear-gradient(transparent, rgba(0,0,0,0.75));
@@ -31,6 +34,7 @@
 <body>
 <div id="wrap">
   <video id="video" autoplay playsinline></video>
+  <div id="splash"><img src="logo.png" alt="Radio Brianza"></div>
   <div id="overlay">
     <div id="dot"></div>
     <span id="status">Connessione in corso…</span>
@@ -40,11 +44,27 @@
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 <script>
-const STREAM  = 'https://57068da1deb21.streamlock.net/radiorbs/radiorbs/playlist.m3u8';
+const STREAM  = 'https://stream.radiobrianza.it/live/livestream.m3u8';
 const video   = document.getElementById('video');
 const statusEl= document.getElementById('status');
 const overlay = document.getElementById('overlay');
 const errmsg  = document.getElementById('errmsg');
+const splash = document.getElementById('splash');
+const splashStarted = Date.now();
+let splashTimer = null;
+video.addEventListener('playing', () => {
+  clearTimeout(splashTimer);
+  splashTimer = setTimeout(() => {
+    if (!video.paused && video.readyState >= 3) splash.classList.add('hidden');
+  }, Math.max(0, 2000 - (Date.now() - splashStarted)));
+  statusEl.textContent = '● LIVE';
+  showOverlay(true);
+});
+video.addEventListener('waiting', () => {
+  clearTimeout(splashTimer);
+  statusEl.textContent = 'Caricamento diretta…';
+  showOverlay(false);
+});
 let retryTimer = null;
 let retries = 0;
 
@@ -56,15 +76,13 @@ function showOverlay(auto) {
 
 function loadStream() {
   clearTimeout(retryTimer);
-  if (Hls.isSupported()) {
+  if (window.Hls && Hls.isSupported()) {
     const hls = new Hls({ enableWorker: false });
     hls.loadSource(STREAM);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       retries = 0;
       video.play().catch(() => {});
-      statusEl.textContent = '● LIVE';
-      showOverlay(true);
     });
     hls.on(Hls.Events.ERROR, (e, data) => {
       if (data.fatal) {
@@ -90,6 +108,7 @@ document.addEventListener('keydown', e => {
   if ([13, 85, 179].includes(e.keyCode)) showOverlay(true);
 });
 
+showOverlay(false);
 loadStream();
 </script>
 </body>

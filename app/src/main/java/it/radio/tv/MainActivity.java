@@ -20,6 +20,7 @@ public class MainActivity extends Activity {
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
         webView = new WebView(this);
+        webView.setBackgroundColor(android.graphics.Color.BLACK);
         setContentView(webView);
 
         WebSettings s = webView.getSettings();
