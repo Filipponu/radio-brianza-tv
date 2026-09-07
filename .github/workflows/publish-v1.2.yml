@@ -1,0 +1,46 @@
+name: Publish Radio Brianza TV 1.2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v1.2.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: publish-radio-brianza-v1.2
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const repo = context.repo;
+            const sha = 'a6ec37e8c4a92acfbea6e8acb2ef9351ae381948';
+            const run = await github.rest.actions.getWorkflowRun({...repo, run_id: 34155433187});
+            if (run.data.head_sha !== sha || run.data.conclusion !== 'success') throw new Error('Build not verified');
+            const zip = await github.rest.actions.downloadArtifact({...repo, artifact_id: 10030802456, archive_format: 'zip'});
+            fs.writeFileSync('apk.zip', Buffer.from(zip.data));
+            await exec.exec('unzip', ['-o', 'apk.zip', '-d', 'apk']);
+            const data = fs.readFileSync('apk/app-debug.apk');
+            const hash = crypto.createHash('sha256').update(data).digest('hex');
+            if (hash !== 'acfa3bff7bf5f37a2c61463d9bb74ee153c5c1dadcc3b72f41edb5cb92579292') throw new Error('APK checksum mismatch');
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({...repo, tag: 'v1.2'})).data;
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              release = (await github.rest.repos.createRelease({...repo, tag_name: 'v1.2', target_commitish: sha, name: 'Radio Brianza TV 1.2', draft: true, prerelease: false, body: 'Conferma di uscita con il tasto Indietro: Resta o Esci. Interruzione della diretta in secondo piano e riavvio al ritorno. APK compilato con successo; prova su Fire TV ancora da effettuare.'})).data;
+            }
+            const existing = release.assets.find(a => a.name === 'app-debug.apk');
+            if (!existing) {
+              await github.rest.repos.uploadReleaseAsset({...repo, release_id: release.id, name: 'app-debug.apk', data, headers: {'content-type': 'application/vnd.android.package-archive', 'content-length': data.length}});
+            } else if (existing.digest !== 'sha256:' + hash) {
+              throw new Error('Existing APK does not match; leaving unchanged');
+            }
+            if (release.draft) await github.rest.repos.updateRelease({...repo, release_id: release.id, draft: false, make_latest: 'true'});
+            core.info('https://github.com/Filipponu/radio-brianza-tv/releases/download/v1.2/app-debug.apk');
