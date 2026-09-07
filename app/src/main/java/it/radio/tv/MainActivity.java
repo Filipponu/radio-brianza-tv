@@ -1,6 +1,7 @@
 package it.radio.tv;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
@@ -11,6 +12,8 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private AlertDialog exitDialog;
+    private boolean reloadOnResume;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,8 +57,47 @@ public class MainActivity extends Activity {
         if (hasFocus) hideSystemUI();
     }
 
-    @Override public void onBackPressed() { /* blocca uscita accidentale */ }
+    @Override public void onBackPressed() {
+        if (isFinishing() || (exitDialog != null && exitDialog.isShowing())) return;
+        exitDialog = new AlertDialog.Builder(this)
+            .setTitle("Radio Brianza TV")
+            .setMessage("Vuoi uscire da Radio Brianza TV?")
+            .setNegativeButton("Resta", (dialog, which) -> hideSystemUI())
+            .setPositiveButton("Esci", (dialog, which) -> {
+                webView.loadUrl("about:blank");
+                finishAndRemoveTask();
+            })
+            .create();
+        exitDialog.setOnDismissListener(dialog -> { exitDialog = null; });
+        exitDialog.show();
+        exitDialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
+    }
 
-    @Override protected void onResume() { super.onResume(); webView.onResume(); }
-    @Override protected void onPause()  { super.onPause();  webView.onPause();  }
+    @Override protected void onResume() {
+        super.onResume();
+        webView.onResume();
+        if (reloadOnResume) {
+            reloadOnResume = false;
+            webView.loadUrl("file:///android_asset/player.html");
+        } else {
+            webView.evaluateJavascript("(function(){var v=document.getElementById('video');if(v){var p=v.play();if(p&&p.catch)p.catch(function(){});}})()", null);
+        }
+    }
+    @Override protected void onPause() {
+        webView.evaluateJavascript("(function(){var v=document.getElementById('video');if(v)v.pause();})()", null);
+        webView.onPause();
+        super.onPause();
+    }
+    @Override protected void onStop() {
+        if (exitDialog != null) exitDialog.dismiss();
+        webView.loadUrl("about:blank");
+        reloadOnResume = true;
+        super.onStop();
+    }
+    @Override protected void onDestroy() {
+        if (exitDialog != null) exitDialog.dismiss();
+        webView.destroy();
+        super.onDestroy();
+    }
 }
+
